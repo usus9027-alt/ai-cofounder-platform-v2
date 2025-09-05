@@ -10,9 +10,12 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Chat API called')
     const { message, conversationHistory } = await request.json()
+    console.log('Received message:', message)
 
     if (!message) {
+      console.log('No message provided')
       return NextResponse.json(
         { error: 'Message is required' },
         { status: 400 }
@@ -20,7 +23,9 @@ export async function POST(request: NextRequest) {
     }
 
     const authHeader = request.headers.get('authorization')
+    console.log('Auth header present:', !!authHeader)
     if (!authHeader) {
+      console.log('No authorization header')
       return NextResponse.json(
         { error: 'Authorization header required' },
         { status: 401 }
@@ -28,14 +33,18 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.replace('Bearer ', '')
+    console.log('Token extracted, length:', token.length)
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {
+      console.log('Auth error:', authError)
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       )
     }
+
+    console.log('User authenticated:', user.id)
 
     await database.createMessage({
       user_id: user.id,

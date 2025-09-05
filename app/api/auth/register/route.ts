@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseAdmin } from '@/lib/supabase'
 import { database } from '@/lib/database'
 
 export async function POST(request: NextRequest) {
@@ -26,15 +26,40 @@ export async function POST(request: NextRequest) {
     }
 
     if (authData.user) {
-      const user = await database.createUser({
-        id: authData.user.id,
-        email: authData.user.email!,
-        name: name || null,
-      })
+      try {
+        console.log('Creating user profile for:', authData.user.id, authData.user.email)
+        
+        const { data: user, error: userError } = await supabaseAdmin
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email: authData.user.email!,
+            name: name || null,
+          })
+          .select()
+          .single()
 
-      if (!user) {
+        console.log('User creation result:', user)
+
+        if (userError) {
+          console.error('Supabase admin createUser error:', userError)
+          return NextResponse.json(
+            { error: 'Failed to create user profile' },
+            { status: 500 }
+          )
+        }
+
+        if (!user) {
+          console.error('Database createUser returned null')
+          return NextResponse.json(
+            { error: 'Failed to create user profile' },
+            { status: 500 }
+          )
+        }
+      } catch (dbError) {
+        console.error('Database error during user creation:', dbError)
         return NextResponse.json(
-          { error: 'Failed to create user profile' },
+          { error: 'Database error during user creation' },
           { status: 500 }
         )
       }

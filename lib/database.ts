@@ -47,13 +47,18 @@ const database = {
   },
 
   async createUser(user: Omit<User, 'created_at' | 'updated_at'>): Promise<User | null> {
+    console.log('Database createUser called with:', user)
     const { data, error } = await supabase
       .from('users')
       .insert(user)
       .select()
       .single()
     
-    if (error) return null
+    if (error) {
+      console.error('Supabase createUser error:', error)
+      return null
+    }
+    console.log('Supabase createUser success:', data)
     return data
   },
 
