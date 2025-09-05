@@ -1,101 +1,213 @@
-import Image from "next/image";
+'use client'
+
+import React, { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { database, CanvasObject } from '@/lib/database'
+import { User } from '@supabase/supabase-js'
+import Header from '@/components/layout/Header'
+import AuthForm from '@/components/AuthForm'
+import CanvasBoard from '@/components/CanvasBoard'
+import Recommendations from '@/components/Recommendations'
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState('')
+  const [messages, setMessages] = useState<Array<{role: string, content: string}>>([])
+  const [chatLoading, setChatLoading] = useState(false)
+  const [newCanvasObjects, setNewCanvasObjects] = useState<CanvasObject[]>([])
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const checkUser = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser(session.user)
+        await loadMessages(session.user.id)
+      }
+    } catch (error) {
+      console.error('Error checking user:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    checkUser()
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          await loadMessages(session.user.id)
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null)
+          setMessages([])
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [checkUser])
+
+  const loadMessages = async (userId: string) => {
+    try {
+      const userMessages = await database.getMessages(userId)
+      const formattedMessages = userMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+      setMessages(formattedMessages)
+    } catch (error) {
+      console.error('Error loading messages:', error)
+    }
+  }
+
+  const handleAuthSuccess = (authUser: User) => {
+    setUser(authUser)
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    setMessages([])
+  }
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!message.trim() || !user || chatLoading) return
+
+    setChatLoading(true)
+    const userMessage = message
+    setMessage('')
+
+    const newMessages = [...messages, { role: 'user', content: userMessage }]
+    setMessages(newMessages)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        throw new Error('No valid session')
+      }
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory: messages,
+          projectId: 'default',
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Chat request failed')
+      }
+
+      if (data.success) {
+        setMessages([...newMessages, { role: 'assistant', content: data.response }])
+        
+        if (data.canvasObjects && data.canvasObjects.length > 0) {
+          setNewCanvasObjects(data.canvasObjects)
+          setTimeout(() => setNewCanvasObjects([]), 1000)
+        }
+      }
+    } catch (error) {
+      console.error('Chat error:', error)
+      setMessages([...newMessages, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error. Please try again.' 
+      }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <AuthForm onAuthSuccess={handleAuthSuccess} />
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header user={user} onLogout={handleLogout} />
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Chat Section */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                AI Co-founder Assistant
+              </h2>
+              
+              <div className="h-96 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg">
+                {messages.length === 0 ? (
+                  <div className="text-gray-500 text-center">
+                    <p>Welcome! I&apos;m your AI co-founder assistant.</p>
+                    <p className="mt-2">Ask me about business ideas, strategy, or anything entrepreneurship-related!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((msg, index) => (
+                      <div
+                        key={index}
+                        className={`p-3 rounded-lg ${
+                          msg.role === 'user'
+                            ? 'bg-blue-100 ml-8'
+                            : 'bg-white mr-8 border border-gray-200'
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-gray-600 mb-1">
+                          {msg.role === 'user' ? 'You' : 'AI Assistant'}
+                        </div>
+                        <div className="text-gray-900 whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleSendMessage} className="flex space-x-2">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Ask me about your business ideas..."
+                  disabled={chatLoading}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={chatLoading || !message.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {chatLoading ? 'Sending...' : 'Send'}
+                </button>
+              </form>
+            </div>
+
+            <Recommendations userId={user.id} authToken={''} />
+          </div>
+
+          {/* Canvas Section */}
+          <div>
+            <CanvasBoard userId={user.id} newObjects={newCanvasObjects} />
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
-  );
+  )
 }
