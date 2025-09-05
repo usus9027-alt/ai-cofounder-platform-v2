@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +12,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const supabaseAdmin = getSupabaseAdmin()
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
+
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
       email,
       password,
     })

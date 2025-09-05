@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { getSupabaseAdmin } from './supabase'
 
 export interface User {
   id: string
@@ -36,6 +36,9 @@ export interface Project {
 
 const database = {
   async getUser(userId: string): Promise<User | null> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return null
+    
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -48,6 +51,9 @@ const database = {
 
   async createUser(user: Omit<User, 'created_at' | 'updated_at'>): Promise<User | null> {
     console.log('Database createUser called with:', user)
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return null
+    
     const { data, error } = await supabase
       .from('users')
       .insert(user)
@@ -63,6 +69,9 @@ const database = {
   },
 
   async getMessages(userId: string): Promise<Message[]> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return []
+    
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -74,6 +83,9 @@ const database = {
   },
 
   async createMessage(message: Omit<Message, 'id' | 'created_at'>): Promise<Message | null> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return null
+    
     const { data, error } = await supabase
       .from('messages')
       .insert(message)
@@ -85,6 +97,9 @@ const database = {
   },
 
   async getCanvasObjects(userId: string): Promise<CanvasObject[]> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return []
+    
     const { data, error } = await supabase
       .from('canvas_objects')
       .select('*')
@@ -96,17 +111,31 @@ const database = {
   },
 
   async createCanvasObject(canvasObject: Omit<CanvasObject, 'id' | 'created_at'>): Promise<CanvasObject | null> {
+    console.log('Database createCanvasObject called with:', canvasObject)
+    const supabase = getSupabaseAdmin()
+    if (!supabase) {
+      console.log('No supabase admin client available - getSupabaseAdmin() returned:', supabase)
+      return null
+    }
+    
     const { data, error } = await supabase
       .from('canvas_objects')
       .insert(canvasObject)
       .select()
       .single()
     
-    if (error) return null
+    if (error) {
+      console.error('Supabase createCanvasObject error:', error)
+      return null
+    }
+    console.log('Supabase createCanvasObject success:', data)
     return data
   },
 
   async updateCanvasObject(id: number, updates: Partial<CanvasObject>): Promise<CanvasObject | null> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return null
+    
     const { data, error } = await supabase
       .from('canvas_objects')
       .update(updates)
@@ -119,6 +148,9 @@ const database = {
   },
 
   async deleteCanvasObject(id: number): Promise<boolean> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return false
+    
     const { error } = await supabase
       .from('canvas_objects')
       .delete()
@@ -128,6 +160,9 @@ const database = {
   },
 
   async getProjects(userId: string): Promise<Project[]> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return []
+    
     const { data, error } = await supabase
       .from('projects')
       .select('*')
@@ -139,6 +174,9 @@ const database = {
   },
 
   async createProject(project: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project | null> {
+    const supabase = getSupabaseAdmin()
+    if (!supabase) return null
+    
     const { data, error } = await supabase
       .from('projects')
       .insert(project)

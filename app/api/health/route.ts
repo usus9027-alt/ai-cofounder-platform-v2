@@ -19,8 +19,12 @@ export async function GET() {
   }
 
   try {
-    const { error } = await supabase.from('users').select('count').limit(1)
-    healthStatus.services.supabase = error ? 'error' : 'healthy'
+    if (!supabase) {
+      healthStatus.services.supabase = 'error'
+    } else {
+      const { error } = await supabase.from('users').select('count').limit(1)
+      healthStatus.services.supabase = error ? 'error' : 'healthy'
+    }
   } catch {
     healthStatus.services.supabase = 'error'
   }

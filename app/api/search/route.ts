@@ -27,6 +27,14 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.replace('Bearer ', '')
+    
+    if (!supabase) {
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
+    
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
     if (authError || !user) {

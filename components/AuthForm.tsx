@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { User } from '@supabase/supabase-js'
+import { getSupabaseClient } from '@/lib/supabase'
 
 interface AuthFormProps {
   onAuthSuccess: (user: User) => void
@@ -41,6 +42,17 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       }
 
       if (data.success) {
+        const supabase = getSupabaseClient()
+        if (supabase && isLogin) {
+          try {
+            await supabase.auth.signInWithPassword({
+              email,
+              password,
+            })
+          } catch (clientError) {
+            console.error('Client-side session error:', clientError)
+          }
+        }
         onAuthSuccess(data.user)
       }
     } catch (err) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase, supabaseAdmin } from '@/lib/supabase'
-import { database } from '@/lib/database'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +12,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
+      email_confirm: true,
     })
 
     if (authError) {
@@ -29,7 +36,7 @@ export async function POST(request: NextRequest) {
       try {
         console.log('Creating user profile for:', authData.user.id, authData.user.email)
         
-        const { data: user, error: userError } = await supabaseAdmin
+        const { data: user, error: userError } = await supabaseAdmin!
           .from('users')
           .insert({
             id: authData.user.id,

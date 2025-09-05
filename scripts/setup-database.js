@@ -1,7 +1,19 @@
+require('dotenv').config({ path: '.env.local' })
 const { createClient } = require('@supabase/supabase-js')
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+console.log('Environment check:', {
+  url: !!supabaseUrl,
+  serviceKey: !!supabaseServiceKey,
+  urlValue: supabaseUrl
+})
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing required environment variables')
+  process.exit(1)
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
